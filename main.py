@@ -16,13 +16,9 @@ from selenium.common.exceptions import (
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 
+# --- 전역 변수 ---
 BASE_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
-
-
-
-# --- 전역 변수 ---
-CONFIG_FILE = 'config.json'
 driver = None
 automation_thread = None
 is_running = False
@@ -243,6 +239,20 @@ def connect_to_existing_browser():
         driver = None
 
 # --- 공용 헬퍼 함수 모음 ---
+def get_td_text_by_pos(row, one_based_index: int) -> str:
+    """
+    현재 행(row)에서 1부터 시작하는 열 번호(one_based_index)의 텍스트를 반환.
+    화면에 보이는 TD 기준이라 가상화 영향이 적음.
+    """
+    try:
+        tds = row.find_elements(By.TAG_NAME, "td")
+        idx = one_based_index - 1
+        if 0 <= idx < len(tds):
+            return (tds[idx].text or "").strip()
+    except Exception:
+        pass
+    return ""
+
 def get_tr_index(row):
     try:
         return (row.get_attribute('index') or '').strip()
@@ -306,7 +316,7 @@ def _click_with_retry(locators, tries=3, delay=0.6):
 
 def _save_verification_excel(rows_data):
     ts = time.strftime('%Y%m%d_%H%M%S')
-    xlsx_path = os.path.join(BASE_DIR, f'upload_verification_{ts}.xlsx')  # ← 여기만 변경
+    xlsx_path = os.path.join(BASE_DIR, f'upload_verification_{ts}.xlsx')
 
     if pd is not None:
         try:
@@ -315,30 +325,36 @@ def _save_verification_excel(rows_data):
                 'idx': '인덱스',
                 'docno': '문서번호',
                 'purpose': '집행용도',
-                'attach': '개별첨부'
+                'attach': '개별첨부',
+                'col11': '품목',
+                'col12': '집행(이체)일자',
             }, inplace=True)
             with pd.ExcelWriter(xlsx_path, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, sheet_name='verify')
             return xlsx_path, time.strftime('%Y-%m-%d %H:%M:%S')
         except Exception as e:
             logging.error(f'[엑셀 저장 오류] {e} — CSV로 대체 저장합니다.')
+
     csv_path = xlsx_path.replace('.xlsx', '.csv')
     try:
         import csv
         with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['인덱스','문서번호','집행용도','개별첨부'])
+            writer = csv.DictWriter(f, fieldnames=['인덱스','문서번호','집행용도','개별첨부','열11','열12'])
             writer.writeheader()
             for row in rows_data:
                 writer.writerow({
-                    '인덱스': row['idx'],
-                    '문서번호': row['docno'],
-                    '집행용도': row['purpose'],
-                    '개별첨부': row['attach']
+                    '인덱스': row.get('idx',''),
+                    '문서번호': row.get('docno',''),
+                    '집행용도': row.get('purpose',''),
+                    '개별첨부': row.get('attach',''),
+                    '품목': row.get('col11',''),
+                    '집행(이체)일자': row.get('col12',''),
                 })
         return csv_path, time.strftime('%Y-%m-%d %H:%M:%S')
     except Exception as e:
         logging.error(f'[CSV 저장 실패] {e}')
         return '', time.strftime('%Y-%m-%d %H:%M:%S')
+
 
 def _find_element_all_contexts(locators, timeout=8):
     end = time.time() + timeout
@@ -635,6 +651,10 @@ def run_verification_logic():
 
                     if p_td and a_td:
                         p, a = p_td.text.strip(), a_td.text.strip()
+
+                        col11_text = get_td_text_by_pos(row, 12)  # 품목
+                        col12_text = get_td_text_by_pos(row, 13)  # 집행(이체)일자
+
                         if clean_text(p) != clean_text(a):
                             targets.append(f"[{idx}] '{p}'")
                             rows_for_excel.append({
@@ -642,6 +662,8 @@ def run_verification_logic():
                                 "docno": extract_docno(p),
                                 "purpose": p,
                                 "attach": a,
+                                "col11": col11_text,
+                                "col12": col12_text,
                             })
                 except StaleElementReferenceException:
                     continue
@@ -924,7 +946,7 @@ def main_automation_logic(pdf_folder_path):
             idx_map, mn, mx = visible_index_map()
             if mn is not None:
                 break
-            press_keys = ActionChains(driver).send_keys
+            # press_keys = ActionChains(driver).send_keys
             ActionChains(driver).send_keys(Keys.ARROW_DOWN).perform()
             time.sleep(0.1)
         if mn is None:
