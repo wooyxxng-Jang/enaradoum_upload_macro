@@ -35,7 +35,10 @@
    chrome.exe --remote-debugging-port=9222 --user-data-dir="C:\chrome_debug"
    ```
    OR 
-   run_debug_chrome.bat 배치파일 실행
+   ```bash
+   run_debug_chrome.bat
+   ```
+   배치파일 실행
 
 2. 프로그램 실행:
 
