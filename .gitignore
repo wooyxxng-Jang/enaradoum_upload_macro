@@ -1,0 +1,29 @@
+# Python 캐시/환경
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.env.*
+
+# IDE / OS
+.vscode/
+.idea/
+*.log
+Thumbs.db
+Desktop.ini
+
+# 빌드 산출물
+build/
+dist/
+*.spec
+*.exe
+
+# 프로그램 데이터
+config.json
+upload_verification_*.xlsx
+upload_verification_*.csv
+
+# 기타
+icon.ico
